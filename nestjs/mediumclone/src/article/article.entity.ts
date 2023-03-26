@@ -34,13 +34,13 @@ export class ArticleEntity {
   taglist: string[];
 
   @Column({ default: 0 })
-  favoutitesCount: number;
+  favouritesCount: number;
 
   @BeforeUpdate()
   updateTimestamp() {
     this.updatedAt = new Date();
   }
 
-  @ManyToOne(() => UserEntity, (user) => user.articles)
+  @ManyToOne(() => UserEntity, (user) => user.articles, { eager: true })
   author: UserEntity;
 }
