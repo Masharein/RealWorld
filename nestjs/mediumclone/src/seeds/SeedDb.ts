@@ -14,11 +14,11 @@ export class SeedDb1679562573606 implements MigrationInterface {
     );
 
     await queryRunner.query(
-      `INSERT INTO articles (slug, title, description, body, taglist, "authorId") VALUES ('first-article', 'first article', 'first article description', 'first article body', 'coffee,dragons', 1)`
+      `INSERT INTO articles (slug, title, description, body, "tagList", "authorId") VALUES ('first-article', 'first article', 'first article description', 'first article body', 'coffee,dragons', 1)`
     );
 
     await queryRunner.query(
-      `INSERT INTO articles (slug, title, description, body, taglist, "authorId") VALUES ('second-article', 'second article', 'second article description', 'second article body', 'coffee,dragons', 1)`
+      `INSERT INTO articles (slug, title, description, body, "tagList", "authorId") VALUES ('second-article', 'second article', 'second article description', 'second article body', 'coffee,dragons', 1)`
     );
   }
   public async down(): Promise<void> {}

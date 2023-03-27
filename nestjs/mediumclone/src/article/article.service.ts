@@ -8,6 +8,7 @@ import { ArticleResponseInterface } from "./types/articleResponse.interface";
 import { ArticlesResponseInterface } from "./types/articlesResponse.interface";
 import slugify from "slugify";
 import { getRepository } from "typeorm";
+import { FollowEntity } from "@app/profile/follow.entity";
 
 @Injectable()
 export class ArticleService {
@@ -16,7 +17,9 @@ export class ArticleService {
     private readonly articleRepository: Repository<ArticleEntity>,
     private dataSource: DataSource,
     @InjectRepository(UserEntity)
-    private readonly userRepository: Repository<UserEntity>
+    private readonly userRepository: Repository<UserEntity>,
+    @InjectRepository(FollowEntity)
+    private readonly followRepository: Repository<FollowEntity>
   ) {}
 
   async findAll(
@@ -33,7 +36,7 @@ export class ArticleService {
     const articlesCount = await queryBuilder.getCount();
 
     if (query.tag) {
-      queryBuilder.andWhere("articles.taglist LIKE :tag", {
+      queryBuilder.andWhere("articles.tagList LIKE :tag", {
         tag: `%${query.tag}%`,
       });
     }
@@ -49,14 +52,14 @@ export class ArticleService {
       });
     }
 
-    if (query.favourited) {
+    if (query.favorited) {
       const author = await this.userRepository.findOne({
         where: {
-          username: query.favourited,
+          username: query.favorited,
         },
-        relations: ["favourites"],
+        relations: ["favorites"],
       });
-      const ids = author.favourites.map((el) => el.id);
+      const ids = author.favorites.map((el) => el.id);
       if (ids.length > 0) {
         queryBuilder.andWhere("articles.id IN (:...ids)", { ids });
       } else {
@@ -72,23 +75,58 @@ export class ArticleService {
       queryBuilder.offset(query.offset);
     }
 
-    let favouriteIds: number[] = [];
+    let favoriteIds: number[] = [];
 
     if (currentUserId) {
       const currentUser = await this.userRepository.findOne({
         where: { id: currentUserId },
-        relations: ["favourites"],
+        relations: ["favorites"],
       });
-      favouriteIds = currentUser.favourites.map((favourite) => favourite.id);
+      favoriteIds = currentUser.favorites.map((favorite) => favorite.id);
     }
 
     const articles = await queryBuilder.getMany();
-    const articlesWithFavourites = articles.map((article) => {
-      const favourited = favouriteIds.includes(article.id);
-      return { ...article, favourited };
+    const articlesWithfavorites = articles.map((article) => {
+      const favorited = favoriteIds.includes(article.id);
+      return { ...article, favorited };
     });
 
-    return { articles: articlesWithFavourites, articlesCount };
+    return { articles: articlesWithfavorites, articlesCount };
+  }
+
+  async getFeed(
+    currentUserId: number,
+    query: any
+  ): Promise<ArticlesResponseInterface> {
+    const follows = await this.followRepository.find({
+      where: {
+        followerId: currentUserId,
+      },
+    });
+    if (follows.length === 0) {
+      return { articles: [], articlesCount: 0 };
+    }
+
+    const followingUserIds = follows.map((follow) => follow.followingId);
+    const queryBuilder = this.dataSource.getRepository(ArticleEntity)
+    .createQueryBuilder('articles')
+    .leftJoinAndSelect('articles.author', 'author')
+    .where('articles.authorId IN (:...ids)', { ids: followingUserIds });
+
+    queryBuilder.orderBy('articles.createdAt', 'DESC');
+
+    const articlesCount = await queryBuilder.getCount()
+
+    if (query.limit) {
+      queryBuilder.limit(query.limit);
+    }
+
+    if (query.offset) {
+      queryBuilder.offset(query.offset);
+    }
+
+    const articles = await queryBuilder.getMany();
+    return { articles, articlesCount };
   }
 
   async createArticle(
@@ -97,8 +135,8 @@ export class ArticleService {
   ): Promise<ArticleEntity> {
     const article = this.articleRepository.create(createArticleDto);
 
-    if (!article.taglist) {
-      article.taglist = [];
+    if (!article.tagList) {
+      article.tagList = [];
     }
 
     article.slug = this.getSlug(createArticleDto.title);
@@ -131,24 +169,24 @@ export class ArticleService {
     return await this.articleRepository.save(article);
   }
 
-  async addArticleToFavourites(
+  async addArticleToFavorites(
     slug: string,
     currentUserId: number
   ): Promise<ArticleEntity> {
     const article = await this.findBySlug(slug);
     const user = await this.userRepository.findOne({
       where: { id: currentUserId },
-      relations: ["favourites"],
+      relations: ["favorites"],
     });
 
-    const isNotFavourited =
-      user.favourites.findIndex(
-        (articleInFavourites) => articleInFavourites.id === article.id
+    const isNotFavorited =
+      user.favorites.findIndex(
+        (articleInFavorites) => articleInFavorites.id === article.id
       ) === -1;
 
-    if (isNotFavourited) {
-      user.favourites.push(article);
-      article.favouritesCount++;
+    if (isNotFavorited) {
+      user.favorites.push(article);
+      article.favoritesCount++;
       await this.userRepository.save(user);
       await this.articleRepository.save(article);
     }
@@ -156,23 +194,23 @@ export class ArticleService {
     return article;
   }
 
-  async deleteArticleFromFavourites(
+  async deleteArticleFromFavorites(
     slug: string,
     currentUserId: number
   ): Promise<ArticleEntity> {
     const article = await this.findBySlug(slug);
     const user = await this.userRepository.findOne({
       where: { id: currentUserId },
-      relations: ["favourites"],
+      relations: ["favorites"],
     });
 
-    const articleIndex = user.favourites.findIndex(
-      (articleInFavourites) => articleInFavourites.id === article.id
+    const articleIndex = user.favorites.findIndex(
+      (articleInFavorites) => articleInFavorites.id === article.id
     );
 
     if (articleIndex >= 0) {
-      user.favourites.splice(articleIndex, 1);
-      article.favouritesCount--;
+      user.favorites.splice(articleIndex, 1);
+      article.favoritesCount--;
       await this.userRepository.save(user);
       await this.articleRepository.save(article);
     }

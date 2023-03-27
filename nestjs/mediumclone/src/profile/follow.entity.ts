@@ -6,7 +6,7 @@ export class FollowEntity {
   id: number;
 
   @Column()
-  followerdId: number;
+  followerId: number;
 
   @Column()
   followingId: number;
